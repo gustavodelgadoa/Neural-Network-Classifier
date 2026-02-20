@@ -1,4 +1,4 @@
-# CIFAR-10 Nueral Network Classifier
+# CIFAR-10 Neural Network Classifier
 
 A fully-connected neural network classifier built with PyTorch to classify images from the CIFAR-10 dataset. This project implements a deep learning model using only linear (fully-connected) layers, without convolutional operations.
 
