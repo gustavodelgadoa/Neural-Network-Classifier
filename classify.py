@@ -11,9 +11,18 @@ import torchvision                  # Includes tools & functions for computer vi
 def main(): 
 
     print("Starting the program")
-    download_dataset('/data/CIFAR10_Training_Data', True, torchvision.transforms.ToTensor(), True)     # downloads training dataset
-    download_dataset('/data/CIFAR10_Testing_Data', False, torchvision.transforms.ToTensor(), True)     # downloads testing dataset
 
+    # ----------------- Download data -----------------------
+    
+    training_data = download_dataset('./data/CIFAR10_Training_Data', True, torchvision.transforms.ToTensor(), True)     # downloads training dataset
+    testing_data = download_dataset('./data/CIFAR10_Testing_Data', False, torchvision.transforms.ToTensor(), True)     # downloads testing dataset
+
+    # ----------------- Load data -----------------------
+
+    training_data_loader = load_data(training_data, 64, True, 0, False)     # splits training data into batches for model feed  
+    testing_data_loader = load_data(testing_data, 64, False, 0, False)      # splits testing data into batches for model feed
+
+    print("Ending the program")
 
 
 def download_dataset(destination_folder, data_set, transform_type, download):
