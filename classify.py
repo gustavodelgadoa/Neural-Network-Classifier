@@ -5,7 +5,10 @@ import torch.nn as nn                               # Include Neural Network Mod
 import torch.nn.functional as functional            # Includes functions such for Activation functions & Loss Functions
 import torch.utils.data                             # Includes tools for handling datasets & data loading for PyTorch
 import torchvision                                  # Includes tools & functions for computer vision tasks (loading datasets, transforming images, and pre-trained models)
-
+import torchvision.transforms as transforms         # 
+import matplotlib.pyplot as plt
+import numpy as np
+import torch.optim as optim
 
 
 def main(): 
@@ -13,16 +16,38 @@ def main():
     print("Starting the program")
 
     # ----------------- Download data -----------------------
-    
+
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     training_data = download_dataset('./data/CIFAR10_Training_Data', True, torchvision.transforms.ToTensor(), True)     # downloads training dataset
     testing_data = download_dataset('./data/CIFAR10_Testing_Data', False, torchvision.transforms.ToTensor(), True)     # downloads testing dataset
     
     # ----------------- Load data ---------------------------
 
-    training_data_loader = load_data(training_data, 64, True, 0, False)     # splits training data into batches for model feed  
-    testing_data_loader = load_data(testing_data, 64, False, 0, False)      # splits testing data into batches for model feed
+    batch_size = 64
+    training_data_loader = load_data(training_data, batch_size, True, 0, False)     # splits training data into batches for model feed  
+    testing_data_loader = load_data(testing_data, batch_size, False, 0, False)      # splits testing data into batches for model feed
 
-    # ----------------- designing network class -----------------------
+    # ----------------- Define classes -----------------------
+
+    classes = ('plane', 'car', 'cird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+    # functions to show an image
+    def imshow(img):
+        img = img / 2 + 0.5     # unnormalize
+        npimg = img.numpy()
+        plt.imshow(np.transpose(npimg, (1, 2, 0)))
+        plt.show()
+
+
+    # get some random training images
+    dataiter = iter(training_data_loader)
+    images, labels = next(dataiter)
+
+    # show images & print class labels
+    imshow(torchvision.utils.make_grid(images))
+    print(' '.join(f'{classes[labels[j]]:5s}' for j in range(batch_size)))
+
+    # ----------------- Design network class -----------------------
 
     class CIFAR10_Net(nn.Module): 
         def __init__(self): 
@@ -52,13 +77,14 @@ def main():
     output = net(test_input)
     print(output.shape)
 
-    # ----------------- Loss Fucntion -----------------------
-    loss_function = nn.CrossEntropyLoss()
-    print(loss_function)
-
-
-    
-    optimzier = ""
+    # ----------------- Loss Function -----------------------
+    target = torch.randn(10)
+    target = target.view(1, -1)
+    criterion = nn.CrossEntropyLoss()
+    loss_function = criterion(output, target)
+    print("loss function: ", loss_function)
+    optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
+    print("optimizer: ", optimizer)
     print("Ending the program")
 
 
@@ -100,8 +126,6 @@ def load_data(dataset_name, batch_size_amount, shuffle_order, number_of_workers,
         drop_last = drop_last_batches
     ) # load_data 
     return load_data
-
-
 
 # Invoke the main function
 if __name__ == "__main__":  
