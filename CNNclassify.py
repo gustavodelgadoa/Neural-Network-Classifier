@@ -233,7 +233,7 @@ def train():
         
             average_train_loss = running_loss / len(training_data_loader)
             training_accuracy = 100 * training_correct / training_total
-            testing_accuracy, testing_loss = evaluate(net, testing_data_loader, criterion, device)
+            testing_accuracy, testing_loss = test(net, testing_data_loader, criterion, device)
 
             run_training_accuracy.append(training_accuracy)
             run_testing_accruacy.append(testing_accuracy)
@@ -367,7 +367,61 @@ def accuracy_curves(training_accuracy, testing_accruacy):
 
 
 def visual_convolution_layer1(model, image_tensor): 
-    
+    model.eval()
+    with torch.no_grad(): 
+        convolution1_output = model.conv1(image_tensor)
+
+    fig, axes = plt.subplots(6, 6, figsize = (10, 10))
+    for i in range(36): 
+        ax = axes[i // 6][i % 6]
+        if i < 32: 
+            feature_map = convolution1_output[0, i].cpu().numpy()
+            ax.imshow(feature_map, cmap= 'gray')
+        ax.axis('off')
+    plt.suptitle('First Convolution layer Feature Maps (32 filters)', fontsize = 12)
+    plt.tight_layout()
+    plt.savefig('CONV_rslt.png')
+    plt.close()
+
+
+def test_resnet_20(): 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # normalization required by resnet20
+    testing_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
+
+    testing_data = torchvision.datasets.CIFAR10(
+        './data/CIFAR10_Testing_Data', 
+        train = false, 
+        transform= testing_transform, 
+        download= True
+    )
+
+    testing_data_loader = torch.utils.data.DataLoader(
+        dataset= testing_data, 
+        batch_size= 128, 
+        shuffle= False, 
+        num_workers= 0
+    )
+
+    model = resnet20().to(device)
+    model.load_state_dict(torch.load('./model/resnet20_cifar10_pretrained.pt', map_location= device, weights_only= True))
+    model.eval()
+    criterion = nn.CrossEntropyLoss()
+    accuracy, average_loss = evaluate(model, testing_data_loader, criterion, device)
+    print(f'ResNet-20 Test Accuracy: {accuracy:.4f}% Test loss: {average_loss:.4f}%')
+
+    # counts MACs and params
+    count_params_macs(model, device, model_name = 'ResNet-20')
+
+    # measures inference speed
+    inference_speed_test(model, model_name = 'ResNet-20', device = device)
+
+def count_params_macs(): 
+
+
+def inference_speed_test(): 
+
 
 # Invoke the main function
 if __name__ == "__main__":  
