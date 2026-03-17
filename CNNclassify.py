@@ -23,23 +23,76 @@ from resnet20.resnet20_cifar import resnet20
 # CIFAR10 class labels
 classes = ('airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
+# ----------------- set random seed -----------------------
+def set_seed(seed): 
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+
+
 # ----------------- Design network class -----------------------
 
 class CIFAR10_Net(nn.Module): 
     """
-    MLP for CIFAR-10 image classification. 
+    Convolutional Nueral Network for CIFAR-10 image classification. 
 
     """    
     def __init__(self): 
         super(CIFAR10_Net, self).__init__()
 
-        self.fc1 = nn.Linear(3072, 512)             # Input Layer
-        self.fc2 = nn.Linear(512, 256)              # Hidden Layer
-        self.fc3 = nn.Linear(256, 10)               # Output Layer
+        # First Convolutional Layer
+        self.conv1 = nn.Conv2d(
+            in_channels=3,
+            out_channels=32, 
+            kernel_size=5, 
+            stride=1, 
+            padding=0
+        )
+        self.bn1 = nn.BatchNorm2d(32)
+
+
+        # Second Convolutional Layer
+        self.conv2 = nn.Conv2d(
+            in_channels=32,
+            out_channels=64, 
+            kernel_size=3, 
+            stride=1, 
+            padding=1
+        )
+        self.bn2 = nn.BatchNorm2d(64)
+
+        
+        # Third Convolutional Layer
+        self.conv3 = nn.Conv2d(
+            in_channels=64,
+            out_channels=128, 
+            kernel_size=3, 
+            stride=1, 
+            padding=1
+        )
+        self.bn3 = nn.BatchNorm2d(128)
+
+        # max pooling layer
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # Dropout
+        self.dropout = nn.Dropout(p=0.4)
+
+        # FC layers
+        self.fc1 = nn.linear(128 * 3 * 3, 512)
+        self.fc2 = nn.linear(512, 256)
+        self.fc3 = nn.Linear(256, 10)
+
 
     def forward(self, x):
         """
-        Defines the forward pass of the Neural Network
+        Defines the forward pass of the Convolutional Neural Network
 
         Args:
             x (torch.Tensor): Input tensor of shape (batch_size, 3, 32, 32)
@@ -47,15 +100,19 @@ class CIFAR10_Net(nn.Module):
         Returns:
             torch.Tensor: raw class scores
         """        
+        x = self.pool(functional.relu(self.bn1(self.conv1(x)))) # conv -> BN -> ReLu -> pool
+        x = self.pool(functional.relu(self.bn2(self.conv2(x)))) # conv -> BN -> ReLu -> pool
+        x = self.pool(functional.relu(self.bn3(self.conv3(x)))) # conv -> BN -> ReLu -> pool
+
         x = x.view(x.size(0), -1) # flattens
-        
-        x = self.fc1(x)             # First fully connected layer
-        x = functional.relu(x)      # ReLu activation
 
-        x = self.fc2(x)             # Second fully connected layer
-        x = functional.relu(x)      # ReLu activation
+        # FC Layers with dropout
+        x = functional.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = functional.relu(self.fc2(x))
+        x = self.dropout(x)
+        x = self.fc3(x)
 
-        x = self.fc3(x)             # Output layer
         return x
 
 
@@ -67,23 +124,36 @@ def load_data():
     Returns:
         tuple: tuple containing training and testing data loaders
     """    
-     #normalized pixel values from 0, 1 to -1, 1
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    
+    # performs augmentation and normalization
+    transform_training = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomCrop(32, padding = 4), 
+        transforms.ToTensor(), 
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    
+    # performs only normalization
+    transform_testing = transforms.Compose([
+        transforms.ToTensor(), 
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    
     training_data = torchvision.datasets.CIFAR10(
         './data/CIFAR10_Training_Data',
         train = True,
-        transform = transform,
+        transform = transform_training,
         download = True
     )     # downloads training dataset
     
     testing_data = torchvision.datasets.CIFAR10(
         './data/CIFAR10_Testing_Data', 
         train = False, 
-        transform = transform, 
+        transform = transform_testing, 
         download = True
     )     # downloads testing dataset
 
-    batch_size = 64
+    batch_size = 128
     training_data_loader = torch.utils.data.DataLoader(
         dataset = training_data, 
         batch_size = batch_size, 
