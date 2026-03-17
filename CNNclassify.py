@@ -175,52 +175,101 @@ def load_data():
 
 def train(): 
     """
-    Trains the CIFAR10_Net model on the CIFAR10 training dataset.
+    Trains the CIFAR10_Net model on the CIFAR10 using 3 different rand seeds.
     """    
 
-    # Load the datasets
-    training_data_loader, testing_data_loader = load_data()
+    random_seeds = [35, 256, 678]
+    final_accuracies = []
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # uses GPU if avail, else CPU
     
-    # Create the model, Define loss function, and Optimizer
-    net = CIFAR10_Net() # creates network instance
-    criterion = nn.CrossEntropyLoss() # cross entropy loss
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.001) # adam optimizer
+    os.makedirs('model', exist_ok= True)
 
-    print(f'{"Loop":<10} {"Train Loss":<15} {"Train Acc %":<15} {"Test Loss":<15} {"Test Acc %":<15}') # table headers for training CLI
+    train_accuracy = []
+    test_accuracy = []
+    plot_seed_index = 0
 
-    # Training loop
-    number_of_epochs = 10
-    for epoch in range(number_of_epochs): 
-        net.train() # sets model to training mode
-        running_loss = 0.0 # accumulates loss over batches
-        training_correct = 0 # counts correct training predictions
-        training_total = 0 # counts all training samples
+    for run_index, random_seed in enumerate(random_seeds): 
+        set_seed(random_seed)
+        print(f'\n Training run {run_index  +1} of 3, seed = {random_seed}')
+        
+        # Load the datasets
+        training_data_loader, testing_data_loader = load_data()
+    
+        # Create the model, Define loss function, and Optimizer
+        net = CIFAR10_Net().to(device) # creates network instance
+        criterion = nn.CrossEntropyLoss() # cross entropy loss
+        optimizer = torch.optim.Adam(net.parameters(), lr=0.001, weight_decay=1e-4) # adam optimizer
 
-        for batch_idx, (images, labels) in enumerate(training_data_loader): 
-            optimizer.zero_grad() # clears gradients
-            outputs = net(images) #  forward pass
-            loss = criterion(outputs, labels) # computes cross rntropy loss
-            loss.backward() # backwards pass
-            optimizer.step() # updates weights using gradient
+        # reduces learning rate on plateau
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 
-            running_loss += loss.item() # adds batch loss
-            _, predicted = torch.max(outputs.data, 1) # gets predicted class
-            training_total += labels.size(0) # adds batch size
-            training_correct += (predicted == labels).sum().item() # counts correct
+        print(f'{"Loop":<10} {"Train Loss":<15} {"Train Acc %":<15} {"Test Loss":<15} {"Test Acc %":<15}') # table headers for training CLI
+
+        # Training loop
+        number_of_epochs = 50
+        run_training_accuracy = []
+        run_testing_accruacy = []
+        for epoch in range(number_of_epochs): 
+            net.train() # sets model to training mode
+            running_loss = 0.0 # accumulates loss over batches
+            training_correct = 0 # counts correct training predictions
+            training_total = 0 # counts all training samples
+
+            for images, labels in training_data_loader:
+                images, labels = images.to(device), labels.to(device)
+
+                optimizer.zero_grad() # clears gradients
+                outputs = net(images) #  forward pass
+                loss = criterion(outputs, labels) # computes cross rntropy loss
+                loss.backward() # backwards pass
+                optimizer.step() # updates weights using gradient
+
+                running_loss += loss.item() # adds batch loss
+                _, predicted = torch.max(outputs.data, 1) # gets predicted class
+                training_total += labels.size(0) # adds batch size
+                training_correct += (predicted == labels).sum().item() # counts correct
+            scheduler.step()
+        
+            average_train_loss = running_loss / len(training_data_loader)
+            training_accuracy = 100 * training_correct / training_total
+            testing_accuracy, testing_loss = evaluate(net, testing_data_loader, criterion, device)
+
+            run_training_accuracy.append(training_accuracy)
+            run_testing_accruacy.append(testing_accuracy)
+
+            # prints epoch results
+            print(f'{epoch+1}/{number_of_epochs}           {average_train_loss:.4f}          {training_accuracy:.4f}        {testing_loss:.4f}          {testing_accuracy:.4f}')
+
+        final_accuracies.append(run_testing_accruacy[-1])
+
+        if run_index == plot_seed_index: 
+            train_accuracy = run_training_accuracy
+            test_accuracy = run_testing_accruacy
+
+    # saves model from last train run
+    save_model(net)
+
+    # plot accuracy 
+    accuracy_curves(train_accuracy, test_accuracy)
+
+    # prints seed results, mean, and standard deviation
+    print("\n Random seed results: ")
+    for i, (random_seed, acc) in enumerate(zip(random_seeds, final_accuracies)): 
+        print(f'Run {i+1}: seed= {random_seed}, final test accuracy: {acc:.4f}%')
+    mean_accuracy = np.mean(final_accuracies)
+    standard_dev = np.std(final_accuracies)
+    print(f'Mean accuracy: {mean_accuracy:.4f}%')
+    print(f'Standard Deviation: {standard_dev:.4f}%')
+
+     # prints THOP comp costs for model
+    count_params_macs(net, device)
+
+    # prints inference speed
+    inference_speed_test(net, model_name='CIFAR10_Net', device = device)
 
         
-        average_train_loss = running_loss / len(training_data_loader)
-        training_accuracy = 100 * training_correct / training_total
-        testing_accuracy, testing_loss = test(net, testing_data_loader, criterion)
-
-        # prints epoch results
-        print(f'{epoch+1}/{number_of_epochs}           {average_train_loss:.4f}          {training_accuracy:.4f}        {testing_loss:.4f}          {testing_accuracy:.4f}')
-
-        # resets accumulators
-        running_loss = 0.0
-        training_correct = 0
-        training_total = 0
-    save_model(net)
+    
 
 # ----------------- test function -----------------------
 def test(model, testing_data_loader, criterion): 
