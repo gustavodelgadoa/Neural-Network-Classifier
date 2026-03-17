@@ -272,32 +272,35 @@ def train():
     
 
 # ----------------- test function -----------------------
-def test(model, testing_data_loader, criterion): 
+def test(model, data_loader, criterion, device): 
     """
-    Evaluates model on the CIFAR10 test dataset
+    Evaluates model on a dataset
 
     Args:
         model (CIFAR10_Net): the neural network to evaluate
-        testing_data_loader (DataLoader): dataloader of test dataset
+        data_loader (DataLoader): dataloader of test dataset
         criterion (nn.CrossEntropyLoss): loss function for computing test loss
+        device: torchs device
 =
     """    
     model.eval() # sets to evaluation mode
     correct = 0 
     total = 0
-    testing_loss = 0
+    running_loss = 0
 
     with torch.no_grad(): 
-        for images, labels in testing_data_loader:
+        for images, labels in data_loader:
+            images, labels = images.to(device), labels.to(device)
+
             outputs = model(images) # forward pass
             loss = criterion(outputs, labels) # computes batch loss
-            testing_loss += loss.item() # accumulates loss
+            running_loss += loss.item() # accumulates loss
 
             _, predicted = torch.max(outputs.data, 1) # gets predicted class index
             total += labels.size(0) # counts total samples
             correct += (predicted == labels).sum().item() # counts correct predictions
 
-    average_testing_loss = testing_loss / len(testing_data_loader) # average loss per batch
+    average_testing_loss = running_loss / len(data_loader) # average loss per batch
     accuracy = 100 * correct / total
     return accuracy, average_testing_loss
 
@@ -307,7 +310,7 @@ def save_model(model):
     Saves the trained models state dict to model directory
 
     """    
-    import os
+    #import os
     os.makedirs('model', exist_ok=True) # creates model folder if not exists
     path = 'model/model.pt'
     torch.save(model.state_dict(), path) # saves model weights
@@ -317,28 +320,54 @@ def save_model(model):
 def predict(image_path): 
     """
     Loads trained model and predicts the class of a single input image
+    + saves visual of first convolutional layer filter output.
     """
-    model = CIFAR10_Net()
-    model.load_state_dict(torch.load('model/model.pt', weights_only=True))
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    model = CIFAR10_Net().to(device)
+    model.load_state_dict(torch.load('model/model.pt', map_location = device, weights_only=True))
     model.eval() 
     
-    image = Image.open(image_path)
+    # process image
     transform = transforms.Compose(
         [transforms.Resize((32, 32)), # resizes to CIFAR10 dimensions
          transforms.ToTensor(),  # converts to tensors
          transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))] # normalized RGB channels
     )
-    image_tensor = transform(image)
-    image_tensor = image_tensor.unsqueeze(0)
+
+    image = Image.open(image_path).convert('RGB')
+    image_tensor = transform(image).unsqueeze(0).to(device)
+
+
+    #  predicts class
     with torch.no_grad(): 
         output = model(image_tensor) # forward pass
         _, predicted = torch.max(output, 1) # get highest scoring class index
-        pred_index = predicted.item() 
+
 
     # maps index to class name and prints
-    predicted_class = classes[pred_index]
+    predicted_class = classes[predicted.item()]
     print(f'prediction result: {predicted_class}')
+    visual_convolution_layer1(model, image_tensor)
 
+# -------------- plotting accuracy curves -------------
+def accuracy_curves(training_accuracy, testing_accruacy): 
+    epochs = range(1, len(training_accuracy) + 1)
+    plt.figure(figsize=(8, 5))
+    plt.plot(epochs, training_accuracy, color = 'blue', label = 'Training Accuracy')
+    plt.plot(epochs, testing_accruacy, color = 'orange', label = 'Testing Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy %')
+    plt.title('Training vs Testing Accuracy')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig('accuracy_curves.png')
+    plt.close()
+
+
+def visual_convolution_layer1(model, image_tensor): 
+    
 
 # Invoke the main function
 if __name__ == "__main__":  
